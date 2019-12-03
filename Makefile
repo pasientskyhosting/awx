@@ -127,7 +127,20 @@ guard-%:
 	    exit 1; \
 	fi
 
-virtualenv: virtualenv_ansible virtualenv_awx
+virtualenv_ps:
+	if [ "$(VENV_BASE)" ]; then \
+		if [ ! -d "$(VENV_BASE)" ]; then \
+			mkdir $(VENV_BASE); \
+		fi; \
+		if [ ! -d "$(VENV_BASE)/ps" ]; then \
+			virtualenv -p python --system-site-packages $(VENV_BASE)/ps && \
+			$(VENV_BASE)/ansible/bin/pip install $(PIP_OPTIONS) --ignore-installed six packaging appdirs && \
+			$(VENV_BASE)/ansible/bin/pip install $(PIP_OPTIONS) --ignore-installed setuptools==36.0.1 && \
+			$(VENV_BASE)/ansible/bin/pip install $(PIP_OPTIONS) --ignore-installed pip==9.0.1; \			
+		fi; \
+	fi
+
+virtualenv: virtualenv_ansible virtualenv_awx virtualenv_ps
 
 virtualenv_ansible:
 	if [ "$(VENV_BASE)" ]; then \
@@ -138,7 +151,7 @@ virtualenv_ansible:
 			virtualenv -p python --system-site-packages $(VENV_BASE)/ansible && \
 			$(VENV_BASE)/ansible/bin/pip install $(PIP_OPTIONS) --ignore-installed six packaging appdirs && \
 			$(VENV_BASE)/ansible/bin/pip install $(PIP_OPTIONS) --ignore-installed setuptools==36.0.1 && \
-			$(VENV_BASE)/ansible/bin/pip install $(PIP_OPTIONS) --ignore-installed pip==9.0.1; \
+			$(VENV_BASE)/ansible/bin/pip install $(PIP_OPTIONS) --ignore-installed pip==9.0.1; \			
 		fi; \
 	fi
 
@@ -162,6 +175,14 @@ virtualenv_awx:
 			$(VENV_BASE)/awx/bin/pip install $(PIP_OPTIONS) --ignore-installed docutils==0.14; \
 		fi; \
 	fi
+
+requirements_ps: virtualenv_ps
+	if [[ "$(PIP_OPTIONS)" == *"--no-index"* ]]; then \
+	    cat requirements/requirements_ps.txt | $(VENV_BASE)/ps/bin/pip install $(PIP_OPTIONS) --ignore-installed -r /dev/stdin ; \
+	else \
+	    cat requirements/requirements_ps.txt | $(VENV_BASE)/ps/bin/pip install $(PIP_OPTIONS) --no-binary $(SRC_ONLY_PKGS) --ignore-installed -r /dev/stdin ; \
+	fi
+	$(VENV_BASE)/ps/bin/pip uninstall --yes -r requirements/requirements_ps_uninstall.txt
 
 requirements_ansible: virtualenv_ansible
 	if [[ "$(PIP_OPTIONS)" == *"--no-index"* ]]; then \
@@ -197,7 +218,7 @@ requirements_awx: virtualenv_awx
 requirements_awx_dev:
 	$(VENV_BASE)/awx/bin/pip install -r requirements/requirements_dev.txt
 
-requirements: requirements_ansible requirements_awx
+requirements: requirements_ansible requirements_awx requirements_ps
 
 requirements_dev: requirements_awx requirements_ansible_py3 requirements_awx_dev requirements_ansible_dev
 

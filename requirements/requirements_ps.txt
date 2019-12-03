@@ -1,0 +1,5 @@
+netaddr==0.7.19
+python-slugify==4.0.0
+ansible==2.9.1
+docker-compose==1.25.0
+terraform-bin==1.0.1
