@@ -133,3 +133,7 @@ zope.interface==4.6.0     # via twisted
 # The following packages are considered to be unsafe in a requirements file:
 pip==9.0.1
 setuptools==36.0.1
+
+# PatientSky
+netaddr==0.7.19
+python-slugify==4.0.0

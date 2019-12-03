@@ -6,7 +6,7 @@ localhost ansible_connection=local ansible_python_interpreter="/usr/bin/env pyth
 # Otherwise the setup playbook will install the official Ansible images. Versions may
 # be selected based on: latest, 1, 1.0, 1.0.0, 1.0.0.123
 # by default the base will be used to search for ansible/awx_web and ansible/awx_task
-dockerhub_base=ansible
+# dockerhub_base=ansible
 
 # Openshift Install
 # Will need to set -e openshift_password=developer -e docker_registry_password=$(oc whoami -t)
@@ -63,11 +63,11 @@ dockerhub_base=ansible
 # Common Docker parameters
 awx_task_hostname=awx
 awx_web_hostname=awxweb
-postgres_data_dir="~/.awx/pgdocker"
+postgres_data_dir="~/Projects/github/pasientskyhosting/terraform-templating/tmp/awx/pgdocker"
 host_port=80
 host_port_ssl=443
 #ssl_certificate=
-docker_compose_dir="~/.awx/awxcompose"
+docker_compose_dir="~/Projects/github/pasientskyhosting/terraform-templating/tmp/awx/awxcompose"
 
 # Required for Openshift when building the image on your own
 # Optional for Openshift if using Dockerhub or another prebuilt registry
@@ -111,7 +111,7 @@ rabbitmq_erlang_cookie=cookiemonster
 #                  Thus this setting must be set to False which will trigger a local build. To view the
 #                  typical dependencies that you might need to install see:
 #                  installer/image_build/files/Dockerfile.sdist
-# use_container_for_build=true
+use_container_for_build=true
 
 # This will create or update a default admin (superuser) account in AWX, if not provided
 # then these default values are used
@@ -129,7 +129,7 @@ secret_key=awxsecret
 # Build AWX with official logos
 # Requires cloning awx-logos repo as a sibling of this project.
 # Review the trademark guidelines at https://github.com/ansible/awx-logos/blob/master/TRADEMARKS.md
-# awx_official=false
+awx_official=true
 
 # Proxy
 #http_proxy=http://proxy:3128
@@ -144,7 +144,7 @@ secret_key=awxsecret
 
 # AWX project data folder. If you need access to the location where AWX stores the projects
 # it manages from the docker host, you can set this to turn it into a volume for the container.
-#project_data_dir=/var/lib/awx/projects
+project_data_dir=~/Projects/github/pasientskyhosting/terraform-templating/tmp/awx/projects
 
 # AWX custom virtual environment folder. Only usable for local isntall.
 #custom_venv_dir=/opt/my-envs/

@@ -43,6 +43,13 @@
     dest: "{{ postgres_data_dir + '/10/data/' }}"
   when: upgrade_postgres | bool
 
+- name: Make sure localhost is allowed all connections in pg_hba.conf
+  lineinfile:
+    path: "{{ postgres_data_dir + '/10/data/pg_hba.conf' }}"
+    state: present
+    regexp: '^.*0.0.0.0/0.*'
+    line: 'host    all             all             0.0.0.0/0               trust' 
+
 - name: Remove old data directory
   file:
     path: "{{ postgres_data_dir + '/pgdata' }}"
