@@ -158,7 +158,7 @@ virtualenv_ansible:
 virtualenv_ansible_py3:
 	if [ "$(VENV_BASE)" ]; then \
 		if [ ! -d "$(VENV_BASE)" ]; then \
-			mkdir $(VENV_BASE); \
+			mkdir -p $(VENV_BASE); \
 		fi; \
 		if [ ! -d "$(VENV_BASE)/ansible" ]; then \
 			$(PYTHON) -m venv --system-site-packages $(VENV_BASE)/ansible; \
@@ -168,7 +168,7 @@ virtualenv_ansible_py3:
 virtualenv_ps_py3:
 	if [ "$(VENV_BASE)" ]; then \
 		if [ ! -d "$(VENV_BASE)" ]; then \
-			mkdir $(VENV_BASE); \
+			mkdir -p $(VENV_BASE); \
 		fi; \
 		if [ ! -d "$(VENV_BASE)/ansible" ]; then \
 			$(PYTHON) -m venv --system-site-packages $(VENV_BASE)/ansible; \
