@@ -68,6 +68,9 @@ ADD requirements/requirements_ansible.txt \
     /tmp/requirements/
 RUN cd /tmp && VENV_BASE="/var/lib/awx/venv" make requirements_awx requirements_ps_py3
 
+# We need custom Netbox inventory dir
+ADD files/ansible/plugins/inventory/netbox.py /var/lib/awx/venv/ansible/lib/python3.6/site-packages/ansible/plugins/inventory/netbox.py
+
 RUN dnf -y remove *-devel \
   gcc \
   gcc-c++ \
