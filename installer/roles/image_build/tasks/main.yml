@@ -173,6 +173,12 @@
     dest: "{{ docker_base_path }}/Makefile"
   delegate_to: localhost
 
+- name: Stage netbox.py custom inventory
+  copy:
+    src: netbox.py
+    dest: "{{ docker_base_path }}/netbox.py"
+  delegate_to: localhost
+
 - name: Build base web image
   docker_image:
     build:
