@@ -703,6 +703,7 @@ class BaseTask(object):
     def __init__(self):
         self.cleanup_paths = []
         self.parent_workflow_job_id = None
+        self.host_map = {}
 
     def update_model(self, pk, _attempt=0, **updates):
         """Reload the model instance from the database and update the
@@ -1001,11 +1002,17 @@ class BaseTask(object):
         return False
 
     def build_inventory(self, instance, private_data_dir):
-        script_params = dict(hostvars=True)
+        script_params = dict(hostvars=True, towervars=True)
         if hasattr(instance, 'job_slice_number'):
             script_params['slice_number'] = instance.job_slice_number
             script_params['slice_count'] = instance.job_slice_count
         script_data = instance.inventory.get_script_data(**script_params)
+        # maintain a list of host_name --> host_id
+        # so we can associate emitted events to Host objects
+        self.host_map = {
+            hostname: hv.pop('remote_tower_id', '')
+            for hostname, hv in script_data.get('_meta', {}).get('hostvars', {}).items()
+        }
         json_data = json.dumps(script_data)
         handle, path = tempfile.mkstemp(dir=private_data_dir)
         f = os.fdopen(handle, 'w')
@@ -1114,6 +1121,15 @@ class BaseTask(object):
                 event_data.pop('parent_uuid', None)
         if self.parent_workflow_job_id:
             event_data['workflow_job_id'] = self.parent_workflow_job_id
+        if self.host_map:
+            host = event_data.get('event_data', {}).get('host', '').strip()
+            if host:
+                event_data['host_name'] = host
+                if host in self.host_map:
+                    event_data['host_id'] = self.host_map[host]
+            else:
+                event_data['host_name'] = ''
+                event_data['host_id'] = ''
         should_write_event = False
         event_data.setdefault(self.event_data_key, self.instance.id)
         self.dispatcher.dispatch(event_data)
@@ -2183,7 +2199,10 @@ class RunProjectUpdate(BaseTask):
             project_path = instance.project.get_project_path(check_if_exists=False)
             if os.path.exists(project_path):
                 git_repo = git.Repo(project_path)
-                self.original_branch = git_repo.active_branch
+                if git_repo.head.is_detached:
+                    self.original_branch = git_repo.head.commit
+                else:
+                    self.original_branch = git_repo.active_branch
 
     @staticmethod
     def make_local_copy(project_path, destination_folder, scm_type, scm_revision):
@@ -2215,25 +2234,28 @@ class RunProjectUpdate(BaseTask):
             copy_tree(project_path, destination_folder)
 
     def post_run_hook(self, instance, status):
-        if self.playbook_new_revision:
-            instance.scm_revision = self.playbook_new_revision
-            instance.save(update_fields=['scm_revision'])
-        if self.job_private_data_dir:
-            # copy project folder before resetting to default branch
-            # because some git-tree-specific resources (like submodules) might matter
-            self.make_local_copy(
-                instance.get_project_path(check_if_exists=False), os.path.join(self.job_private_data_dir, 'project'),
-                instance.scm_type, instance.scm_revision
-            )
-            if self.original_branch:
-                # for git project syncs, non-default branches can be problems
-                # restore to branch the repo was on before this run
-                try:
-                    self.original_branch.checkout()
-                except Exception:
-                    # this could have failed due to dirty tree, but difficult to predict all cases
-                    logger.exception('Failed to restore project repo to prior state after {}'.format(instance.log_format))
-        self.release_lock(instance)
+        # To avoid hangs, very important to release lock even if errors happen here
+        try:
+            if self.playbook_new_revision:
+                instance.scm_revision = self.playbook_new_revision
+                instance.save(update_fields=['scm_revision'])
+            if self.job_private_data_dir:
+                # copy project folder before resetting to default branch
+                # because some git-tree-specific resources (like submodules) might matter
+                self.make_local_copy(
+                    instance.get_project_path(check_if_exists=False), os.path.join(self.job_private_data_dir, 'project'),
+                    instance.scm_type, instance.scm_revision
+                )
+                if self.original_branch:
+                    # for git project syncs, non-default branches can be problems
+                    # restore to branch the repo was on before this run
+                    try:
+                        self.original_branch.checkout()
+                    except Exception:
+                        # this could have failed due to dirty tree, but difficult to predict all cases
+                        logger.exception('Failed to restore project repo to prior state after {}'.format(instance.log_format))
+        finally:
+            self.release_lock(instance)
         p = instance.project
         if instance.job_type == 'check' and status not in ('failed', 'canceled',):
             if self.playbook_new_revision:

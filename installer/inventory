@@ -147,7 +147,11 @@ awx_official=true
 project_data_dir="~/.awx/projects"
 
 # AWX custom virtual environment folder. Only usable for local install.
+<<<<<<< HEAD
 # custom_venv_dir=~/Projects/github/pasientskyhosting/terraform-templating/venv/
+=======
+#custom_venv_dir=/opt/my-envs/
+>>>>>>> 1dfb5009ba4000fff3b365e1e2533cbe5833dd88
 
 # CA Trust directory. If you need to provide custom CA certificates, supplying
 # this variable causes this directory on the host to be bind mounted over
