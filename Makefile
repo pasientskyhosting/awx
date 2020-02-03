@@ -154,15 +154,8 @@ virtualenv_ansible:
 			mkdir $(VENV_BASE); \
 		fi; \
 		if [ ! -d "$(VENV_BASE)/ansible" ]; then \
-<<<<<<< HEAD
-			virtualenv -p python --system-site-packages $(VENV_BASE)/ansible && \
-			$(VENV_BASE)/ansible/bin/pip install $(PIP_OPTIONS) --ignore-installed six packaging appdirs && \
-			$(VENV_BASE)/ansible/bin/pip install $(PIP_OPTIONS) --ignore-installed setuptools==36.0.1 && \
-			$(VENV_BASE)/ansible/bin/pip install $(PIP_OPTIONS) --ignore-installed pip==9.0.1; \			
-=======
 			virtualenv -p python $(VENV_BASE)/ansible && \
 			$(VENV_BASE)/ansible/bin/pip install $(PIP_OPTIONS) $(VENV_BOOTSTRAP); \
->>>>>>> 1dfb5009ba4000fff3b365e1e2533cbe5833dd88
 		fi; \
 	fi
 
