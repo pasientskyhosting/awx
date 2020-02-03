@@ -29,6 +29,7 @@ const mockJobTemplate = {
   allow_simultaneous: false,
   use_fact_cache: false,
   host_config_key: '',
+  scm_branch: '',
   summary_fields: {
     user_capabilities: {
       edit: true,
@@ -161,6 +162,11 @@ describe('<JobTemplateEdit />', () => {
     JobTemplatesAPI.readInstanceGroups.mockReturnValue({
       data: { results: mockInstanceGroups },
     });
+    ProjectsAPI.readDetail.mockReturnValue({
+      id: 1,
+      allow_override: true,
+      name: 'foo',
+    });
   });
 
   afterEach(() => {
@@ -184,47 +190,47 @@ describe('<JobTemplateEdit />', () => {
         <JobTemplateEdit template={mockJobTemplate} />
       );
     });
-    await waitForElement(wrapper, 'JobTemplateForm', e => e.length === 1);
     const updatedTemplateData = {
       name: 'new name',
-      description: 'new description',
-      job_type: 'check',
+      inventory: 1,
     };
     const labels = [
-      { id: 3, name: 'Foo', isNew: true },
-      { id: 4, name: 'Bar', isNew: true },
+      { id: 3, name: 'Foo' },
+      { id: 4, name: 'Bar' },
       { id: 5, name: 'Maple' },
       { id: 6, name: 'Tree' },
     ];
-    JobTemplatesAPI.update.mockResolvedValue({
-      data: { ...updatedTemplateData },
+    await waitForElement(wrapper, 'EmptyStateBody', el => el.length === 0);
+    act(() => {
+      wrapper.find('input#template-name').simulate('change', {
+        target: { value: 'new name', name: 'name' },
+      });
+      wrapper.find('AnsibleSelect#template-job-type').invoke('onChange')(
+        'check'
+      );
+      wrapper.find('InventoryLookup').invoke('onChange')({
+        id: 1,
+        organization: 1,
+      });
+      wrapper.find('LabelSelect').invoke('onChange')(labels);
     });
-    const formik = wrapper.find('Formik').instance();
-    const changeState = await act(
-      () =>
-        new Promise(resolve => {
-          const values = {
-            ...mockJobTemplate,
-            ...updatedTemplateData,
-            labels,
-            instanceGroups: [],
-          };
-          formik.setState({ values }, () => resolve());
-        })
-    );
-    await changeState;
+    wrapper.update();
     await act(async () => {
       wrapper.find('button[aria-label="Save"]').simulate('click');
     });
     await sleep(0);
 
-    expect(JobTemplatesAPI.update).toHaveBeenCalledWith(1, {
+    const expected = {
       ...mockJobTemplate,
       ...updatedTemplateData,
-    });
+      become_enabled: false,
+    };
+    delete expected.summary_fields;
+    delete expected.id;
+    delete expected.type;
+    expect(JobTemplatesAPI.update).toHaveBeenCalledWith(1, expected);
     expect(JobTemplatesAPI.disassociateLabel).toHaveBeenCalledTimes(2);
-    expect(JobTemplatesAPI.associateLabel).toHaveBeenCalledTimes(2);
-    expect(JobTemplatesAPI.generateLabel).toHaveBeenCalledTimes(2);
+    expect(JobTemplatesAPI.associateLabel).toHaveBeenCalledTimes(4);
   });
 
   test('should navigate to job template detail when cancel is clicked', async () => {

@@ -307,7 +307,7 @@ class BaseAccess(object):
 
         return True  # User has access to both, permission check passed
 
-    def check_license(self, add_host_name=None, feature=None, check_expiration=True):
+    def check_license(self, add_host_name=None, feature=None, check_expiration=True, quiet=False):
         validation_info = get_licenser().validate()
         if validation_info.get('license_type', 'UNLICENSED') == 'open':
             return
@@ -317,8 +317,10 @@ class BaseAccess(object):
             validation_info['time_remaining'] = 99999999
             validation_info['grace_period_remaining'] = 99999999
 
-        report_violation = lambda message: logger.error(message)
-
+        if quiet:
+            report_violation = lambda message: None
+        else:
+            report_violation = lambda message: logger.warning(message)
         if (
             validation_info.get('trial', False) is True or
             validation_info['instance_count'] == 10  # basic 10 license
@@ -907,7 +909,7 @@ class HostAccess(BaseAccess):
     model = Host
     select_related = ('created_by', 'modified_by', 'inventory',
                       'last_job__job_template', 'last_job_host_summary__job',)
-    prefetch_related = ('groups',)
+    prefetch_related = ('groups', 'inventory_sources')
 
     def filtered_queryset(self):
         return self.model.objects.filter(inventory__in=Inventory.accessible_pk_qs(self.user, 'read_role'))
@@ -2238,7 +2240,7 @@ class JobEventAccess(BaseAccess):
     '''
 
     model = JobEvent
-    prefetch_related = ('hosts', 'job__job_template', 'host',)
+    prefetch_related = ('job__job_template', 'host',)
 
     def filtered_queryset(self):
         return self.model.objects.filter(

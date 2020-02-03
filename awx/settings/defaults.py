@@ -5,7 +5,6 @@ import os
 import re  # noqa
 import sys
 from datetime import timedelta
-from celery.schedules import crontab
 
 # global settings
 from django.conf import global_settings
@@ -441,7 +440,7 @@ CELERYBEAT_SCHEDULE = {
     },
     'gather_analytics': {
         'task': 'awx.main.tasks.gather_analytics',
-        'schedule': crontab(hour='*/6')
+        'schedule': timedelta(minutes=5)
     },
     'task_manager': {
         'task': 'awx.main.scheduler.tasks.run_task_manager',
@@ -665,6 +664,9 @@ PENDO_TRACKING_STATE = "off"
 # Note: This setting may be overridden by database settings.
 INSIGHTS_TRACKING_STATE = False
 
+# Last gather date for Analytics
+AUTOMATION_ANALYTICS_LAST_GATHER = None
+AUTOMATION_ANALYTICS_INTERVAL = 14400
 
 # Default list of modules allowed for ad hoc commands.
 # Note: This setting may be overridden by database settings.
@@ -1142,8 +1144,7 @@ LOGGING = {
             'handlers': ['null']
         },
         'awx.main.commands.run_callback_receiver': {
-            'handlers': ['callback_receiver'],
-            'level': 'INFO'  # in debug mode, includes full callback data
+            'handlers': ['callback_receiver'],  # level handled by dynamic_level_filter
         },
         'awx.main.dispatch': {
             'handlers': ['dispatcher'],
@@ -1220,6 +1221,9 @@ AWX_REQUEST_PROFILE = False
 # ~ dot -o profile.png -Tpng /var/log/tower/profile/some-profile-data.dot
 #
 AWX_REQUEST_PROFILE_WITH_DOT = False
+
+# Allow profiling callback workers via SIGUSR1
+AWX_CALLBACK_PROFILE = False
 
 # Delete temporary directories created to store playbook run-time
 AWX_CLEANUP_PATHS = True

@@ -28,7 +28,7 @@ import {
   ProjectLookup,
   MultiCredentialsLookup,
 } from '@components/Lookup';
-import { JobTemplatesAPI } from '@api';
+import { JobTemplatesAPI, ProjectsAPI } from '@api';
 import LabelSelect from './LabelSelect';
 import PlaybookSelect from './PlaybookSelect';
 
@@ -81,16 +81,31 @@ class JobTemplateForm extends Component {
     this.loadRelatedInstanceGroups = this.loadRelatedInstanceGroups.bind(this);
     this.handleProjectUpdate = this.handleProjectUpdate.bind(this);
     this.setContentError = this.setContentError.bind(this);
+    this.fetchProject = this.fetchProject.bind(this);
   }
 
   componentDidMount() {
     const { validateField } = this.props;
     this.setState({ contentError: null, hasContentLoading: true });
     // TODO: determine when LabelSelect has finished loading labels
-    Promise.all([this.loadRelatedInstanceGroups()]).then(() => {
-      this.setState({ hasContentLoading: false });
-      validateField('project');
-    });
+    Promise.all([this.loadRelatedInstanceGroups(), this.fetchProject()]).then(
+      () => {
+        this.setState({ hasContentLoading: false });
+        validateField('project');
+      }
+    );
+  }
+
+  async fetchProject() {
+    const { project } = this.state;
+    if (project && project.id) {
+      try {
+        const { data: projectData } = await ProjectsAPI.readDetail(project.id);
+        this.setState({ project: projectData });
+      } catch (err) {
+        this.setState({ contentError: err });
+      }
+    }
   }
 
   async loadRelatedInstanceGroups() {
@@ -124,6 +139,8 @@ class JobTemplateForm extends Component {
   handleProjectUpdate(project) {
     const { setFieldValue } = this.props;
     setFieldValue('project', project.id);
+    setFieldValue('playbook', 0);
+    setFieldValue('scm_branch', '');
     this.setState({ project });
   }
 
@@ -147,6 +164,7 @@ class JobTemplateForm extends Component {
       i18n,
       template,
     } = this.props;
+
     const jobTypeOptions = [
       {
         value: '',
@@ -205,7 +223,8 @@ class JobTemplateForm extends Component {
             name="job_type"
             validate={required(null, i18n)}
             onBlur={handleBlur}
-            render={({ form, field }) => {
+          >
+            {({ form, field }) => {
               const isValid = !form.touched.job_type || !form.errors.job_type;
               return (
                 <FormGroup
@@ -230,11 +249,12 @@ class JobTemplateForm extends Component {
                 </FormGroup>
               );
             }}
-          />
+          </Field>
           <Field
             name="inventory"
             validate={required(i18n._(t`Select a value for this field`), i18n)}
-            render={({ form }) => (
+          >
+            {({ form }) => (
               <InventoryLookup
                 value={inventory}
                 onBlur={() => form.setFieldTouched('inventory')}
@@ -252,11 +272,9 @@ class JobTemplateForm extends Component {
                 error={form.errors.inventory}
               />
             )}
-          />
-          <Field
-            name="project"
-            validate={this.handleProjectValidation()}
-            render={({ form }) => (
+          </Field>
+          <Field name="project" validate={this.handleProjectValidation()}>
+            {({ form }) => (
               <ProjectLookup
                 value={project}
                 onBlur={() => form.setFieldTouched('project')}
@@ -268,12 +286,21 @@ class JobTemplateForm extends Component {
                 required
               />
             )}
-          />
+          </Field>
+          {project && project.allow_override && (
+            <FormField
+              id="scm_branch"
+              name="scm_branch"
+              type="text"
+              label={i18n._(t`SCM Branch`)}
+            />
+          )}
           <Field
             name="playbook"
             validate={required(i18n._(t`Select a value for this field`), i18n)}
             onBlur={handleBlur}
-            render={({ field, form }) => {
+          >
+            {({ field, form }) => {
               const isValid = !form.touched.playbook || !form.errors.playbook;
               return (
                 <FormGroup
@@ -299,12 +326,11 @@ class JobTemplateForm extends Component {
                 </FormGroup>
               );
             }}
-          />
+          </Field>
         </FormRow>
         <FormRow>
-          <Field
-            name="labels"
-            render={({ field }) => (
+          <Field name="labels">
+            {({ field }) => (
               <FormGroup label={i18n._(t`Labels`)} fieldId="template-labels">
                 <FieldTooltip
                   content={i18n._(t`Optional labels that describe this job template,
@@ -318,13 +344,11 @@ class JobTemplateForm extends Component {
                 />
               </FormGroup>
             )}
-          />
+          </Field>
         </FormRow>
         <FormRow>
-          <Field
-            name="credentials"
-            fieldId="template-credentials"
-            render={({ field }) => (
+          <Field name="credentials" fieldId="template-credentials">
+            {({ field }) => (
               <MultiCredentialsLookup
                 value={field.value}
                 onChange={newCredentials =>
@@ -336,7 +360,7 @@ class JobTemplateForm extends Component {
                 )}
               />
             )}
-          />
+          </Field>
         </FormRow>
         <AdvancedFieldsWrapper label="Advanced">
           <FormRow>
@@ -369,9 +393,8 @@ class JobTemplateForm extends Component {
                   playbook. Multiple patterns are allowed. Refer to Ansible
                   documentation for more information and examples on patterns.`)}
             />
-            <Field
-              name="verbosity"
-              render={({ field }) => (
+            <Field name="verbosity">
+              {({ field }) => (
                 <FormGroup
                   fieldId="template-verbosity"
                   label={i18n._(t`Verbosity`)}
@@ -387,7 +410,7 @@ class JobTemplateForm extends Component {
                   />
                 </FormGroup>
               )}
-            />
+            </Field>
             <FormField
               id="template-job-slicing"
               name="job_slice_count"
@@ -408,9 +431,8 @@ class JobTemplateForm extends Component {
                 before the task is canceled. Defaults to 0 for no job
                 timeout.`)}
             />
-            <Field
-              name="diff_mode"
-              render={({ field, form }) => (
+            <Field name="diff_mode">
+              {({ field, form }) => (
                 <FormGroup
                   fieldId="template-show-changes"
                   label={i18n._(t`Show Changes`)}
@@ -432,11 +454,10 @@ class JobTemplateForm extends Component {
                   </div>
                 </FormGroup>
               )}
-            />
+            </Field>
           </FormRow>
-          <Field
-            name="instanceGroups"
-            render={({ field, form }) => (
+          <Field name="instanceGroups">
+            {({ field, form }) => (
               <InstanceGroupsLookup
                 css="margin-top: 20px"
                 value={field.value}
@@ -445,10 +466,9 @@ class JobTemplateForm extends Component {
                   to run on.`)}
               />
             )}
-          />
-          <Field
-            name="job_tags"
-            render={({ field, form }) => (
+          </Field>
+          <Field name="job_tags">
+            {({ field, form }) => (
               <FormGroup
                 label={i18n._(t`Job Tags`)}
                 css="margin-top: 20px"
@@ -467,10 +487,9 @@ class JobTemplateForm extends Component {
                 />
               </FormGroup>
             )}
-          />
-          <Field
-            name="skip_tags"
-            render={({ field, form }) => (
+          </Field>
+          <Field name="skip_tags">
+            {({ field, form }) => (
               <FormGroup
                 label={i18n._(t`Skip Tags`)}
                 css="margin-top: 20px"
@@ -489,7 +508,7 @@ class JobTemplateForm extends Component {
                 />
               </FormGroup>
             )}
-          />
+          </Field>
           <GridFormGroup
             fieldId="template-option-checkboxes"
             isInline
@@ -590,6 +609,7 @@ const FormikApp = withFormik({
       job_type: template.job_type || 'run',
       inventory: template.inventory || '',
       project: template.project || '',
+      scm_branch: template.scm_branch || '',
       playbook: template.playbook || '',
       labels: summary_fields.labels.results || [],
       forks: template.forks || 0,

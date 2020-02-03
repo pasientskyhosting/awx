@@ -450,19 +450,6 @@ class JobEvent(BasePlaybookEvent):
         default='',
         editable=False,
     )
-    hosts = models.ManyToManyField(
-        'Host',
-        related_name='job_events',
-        editable=False,
-    )
-    parent = models.ForeignKey(
-        'self',
-        related_name='children',
-        null=True,
-        default=None,
-        on_delete=models.SET_NULL,
-        editable=False,
-    )
     parent_uuid = models.CharField(
         max_length=1024,
         default='',
@@ -617,6 +604,7 @@ class BaseCommandEvent(CreatedModifiedModel):
             kwargs.pop('created', None)
 
         sanitize_event_keys(kwargs, cls.VALID_KEYS)
+        kwargs.pop('workflow_job_id', None)
         event = cls(**kwargs)
         event._update_from_event_data()
         return event

@@ -13,6 +13,7 @@ from urllib.parse import urljoin
 
 # Django
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 #from django.core.cache import cache
 from django.utils.encoding import smart_str
@@ -28,7 +29,7 @@ from awx.api.versioning import reverse
 from awx.main.models.base import (
     BaseModel, CreatedModifiedModel,
     prevent_search, accepts_json,
-    JOB_TYPE_CHOICES, VERBOSITY_CHOICES,
+    JOB_TYPE_CHOICES, NEW_JOB_TYPE_CHOICES, VERBOSITY_CHOICES,
     VarsDictProperty
 )
 from awx.main.models.events import JobEvent, SystemJobEvent
@@ -204,6 +205,11 @@ class JobTemplate(UnifiedJobTemplate, JobOptions, SurveyJobTemplateMixin, Resour
         app_label = 'main'
         ordering = ('name',)
 
+    job_type = models.CharField(
+        max_length=64,
+        choices=NEW_JOB_TYPE_CHOICES,
+        default='run',
+    )
     host_config_key = prevent_search(models.CharField(
         max_length=1024,
         blank=True,
@@ -292,6 +298,11 @@ class JobTemplate(UnifiedJobTemplate, JobOptions, SurveyJobTemplateMixin, Resour
     @property
     def resources_needed_to_start(self):
         return [fd for fd in ['project', 'inventory'] if not getattr(self, '{}_id'.format(fd))]
+
+    def clean_forks(self):
+        if settings.MAX_FORKS > 0 and self.forks > settings.MAX_FORKS:
+            raise ValidationError(_(f'Maximum number of forks ({settings.MAX_FORKS}) exceeded.'))
+        return self.forks
 
     def create_job(self, **kwargs):
         '''
@@ -1060,7 +1071,7 @@ class JobHostSummary(CreatedModifiedModel):
     processed = models.PositiveIntegerField(default=0, editable=False)
     rescued = models.PositiveIntegerField(default=0, editable=False)
     skipped = models.PositiveIntegerField(default=0, editable=False)
-    failed = models.BooleanField(default=False, editable=False)
+    failed = models.BooleanField(default=False, editable=False, db_index=True)
 
     def __str__(self):
         host = getattr_dne(self, 'host')
@@ -1095,7 +1106,6 @@ class JobHostSummary(CreatedModifiedModel):
             update_fields.append('last_job_host_summary_id')
         if update_fields:
             self.host.save(update_fields=update_fields)
-        #self.host.update_computed_fields()
 
 
 class SystemJobOptions(BaseModel):

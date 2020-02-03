@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { func, shape } from 'prop-types';
 
-import { withRouter } from 'react-router-dom';
+import { useRouteMatch } from 'react-router-dom';
 import { Formik, Field } from 'formik';
 import { withI18n } from '@lingui/react';
 import { t } from '@lingui/macro';
@@ -20,6 +20,8 @@ function HostForm({ handleSubmit, handleCancel, host, i18n }) {
     host ? host.summary_fields.inventory : ''
   );
 
+  const hostAddMatch = useRouteMatch('/hosts/add');
+
   return (
     <Formik
       initialValues={{
@@ -29,7 +31,8 @@ function HostForm({ handleSubmit, handleCancel, host, i18n }) {
         variables: host.variables,
       }}
       onSubmit={handleSubmit}
-      render={formik => (
+    >
+      {formik => (
         <Form autoComplete="off" onSubmit={formik.handleSubmit}>
           <FormRow>
             <FormField
@@ -46,14 +49,15 @@ function HostForm({ handleSubmit, handleCancel, host, i18n }) {
               type="text"
               label={i18n._(t`Description`)}
             />
-            {!host.id && (
+            {hostAddMatch && (
               <Field
                 name="inventory"
                 validate={required(
                   i18n._(t`Select a value for this field`),
                   i18n
                 )}
-                render={({ form }) => (
+              >
+                {({ form }) => (
                   <InventoryLookup
                     value={inventory}
                     onBlur={() => form.setFieldTouched('inventory')}
@@ -71,7 +75,7 @@ function HostForm({ handleSubmit, handleCancel, host, i18n }) {
                     error={form.errors.inventory}
                   />
                 )}
-              />
+              </Field>
             )}
           </FormRow>
           <FormRow>
@@ -87,7 +91,7 @@ function HostForm({ handleSubmit, handleCancel, host, i18n }) {
           />
         </Form>
       )}
-    />
+    </Formik>
   );
 }
 
@@ -110,4 +114,4 @@ HostForm.defaultProps = {
 };
 
 export { HostForm as _HostForm };
-export default withI18n()(withRouter(HostForm));
+export default withI18n()(HostForm);

@@ -617,6 +617,18 @@ register(
 )
 
 register(
+    'MAX_FORKS',
+    field_class=fields.IntegerField,
+    allow_null=False,
+    default=200,
+    label=_('Maximum number of forks per job.'),
+    help_text=_('Saving a Job Template with more than this number of forks will result in an error. '
+                'When set to 0, no limit is applied.'),
+    category=_('Jobs'),
+    category_slug='jobs',
+)
+
+register(
     'LOG_AGGREGATOR_HOST',
     field_class=fields.CharField,
     allow_null=True,
@@ -787,6 +799,28 @@ register(
 )
 
 
+register(
+    'AUTOMATION_ANALYTICS_LAST_GATHER',
+    field_class=fields.DateTimeField,
+    label=_('Last gather date for Automation Analytics.'),
+    allow_null=True,
+    category=_('System'),
+    category_slug='system'
+)
+
+
+register(
+    'AUTOMATION_ANALYTICS_GATHER_INTERVAL',
+    field_class=fields.IntegerField,
+    label=_('Automation Analytics Gather Interval'),
+    help_text=_('Interval (in seconds) between data gathering.'),
+    default=14400,	# every 4 hours
+    min_value=1800,	# every 30 minutes
+    category=_('System'),
+    category_slug='system'
+)
+
+
 def logging_validate(serializer, attrs):
     if not serializer.instance or \
             not hasattr(serializer.instance, 'LOG_AGGREGATOR_HOST') or \
@@ -869,6 +903,11 @@ def galaxy_validate(serializer, attrs):
             setting_name = '{}{}'.format(prefix, k.upper())
             errors.setdefault(setting_name, [])
             errors[setting_name].append(msg)
+    if not galaxy_data['url']:
+        if _new_value('PUBLIC_GALAXY_ENABLED') is False:
+            errors.setdefault('PUBLIC_GALAXY_ENABLED', [])
+            msg = _('A URL for Primary Galaxy must be defined before disabling public Galaxy.')
+            errors['PUBLIC_GALAXY_ENABLED'].append(msg)
 
     if errors:
         raise serializers.ValidationError(errors)

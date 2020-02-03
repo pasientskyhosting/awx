@@ -1,9 +1,8 @@
 import React from 'react';
-import { shape, string, number, arrayOf } from 'prop-types';
+import { shape, string, number, arrayOf, node, oneOfType } from 'prop-types';
 import { Tab, Tabs as PFTabs } from '@patternfly/react-core';
-import { withRouter } from 'react-router-dom';
+import { useHistory } from 'react-router-dom';
 import styled from 'styled-components';
-import { CaretLeftIcon } from '@patternfly/react-icons';
 
 const Tabs = styled(PFTabs)`
   --pf-c-tabs__button--PaddingLeft: 20px;
@@ -38,7 +37,8 @@ const Tabs = styled(PFTabs)`
 `;
 
 function RoutedTabs(props) {
-  const { history, tabsArray } = props;
+  const { tabsArray } = props;
+  const history = useHistory();
 
   const getActiveTabId = () => {
     const match = tabsArray.find(tab => tab.link === history.location.pathname);
@@ -63,34 +63,21 @@ function RoutedTabs(props) {
           eventKey={tab.id}
           key={tab.id}
           link={tab.link}
-          title={
-            tab.isNestedTabs ? (
-              <>
-                <CaretLeftIcon /> {tab.name}
-              </>
-            ) : (
-              tab.name
-            )
-          }
+          title={tab.name}
         />
       ))}
     </Tabs>
   );
 }
+
 RoutedTabs.propTypes = {
-  history: shape({
-    location: shape({
-      pathname: string.isRequired,
-    }).isRequired,
-  }).isRequired,
   tabsArray: arrayOf(
     shape({
       id: number.isRequired,
       link: string.isRequired,
-      name: string.isRequired,
+      name: oneOfType([string.isRequired, node.isRequired]),
     })
   ).isRequired,
 };
 
-export { RoutedTabs as _RoutedTabs };
-export default withRouter(RoutedTabs);
+export default RoutedTabs;

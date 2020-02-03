@@ -339,15 +339,23 @@ def send_notifications(notification_list, job_id=None):
 def gather_analytics():
     if not settings.INSIGHTS_TRACKING_STATE:
         return
-    try:
-        tgz = analytics.gather()
-        if not tgz:
-            return
-        logger.debug('gathered analytics: {}'.format(tgz))
-        analytics.ship(tgz)
-    finally:
-        if os.path.exists(tgz):
-            os.remove(tgz)
+    last_time = settings.AUTOMATION_ANALYTICS_LAST_GATHER
+    gather_time = now()
+    if not last_time or ((gather_time - last_time).total_seconds() > settings.AUTOMATION_ANALYTICS_GATHER_INTERVAL):
+        with advisory_lock('gather_analytics_lock', wait=False) as acquired:
+            if acquired is False:
+                logger.debug('Not gathering analytics, another task holds lock')
+                return
+            try:
+                tgz = analytics.gather()
+                if not tgz:
+                    return
+                logger.info('gathered analytics: {}'.format(tgz))
+                analytics.ship(tgz)
+                settings.AUTOMATION_ANALYTICS_LAST_GATHER = gather_time
+            finally:
+                if os.path.exists(tgz):
+                    os.remove(tgz)
 
 
 @task(queue=get_local_queuename)
@@ -499,7 +507,7 @@ def awx_periodic_scheduler():
 
         invalid_license = False
         try:
-            access_registry[Job](None).check_license()
+            access_registry[Job](None).check_license(quiet=True)
         except PermissionDenied as e:
             invalid_license = e
 
@@ -588,7 +596,7 @@ def handle_work_error(task_id, *args, **kwargs):
 
 
 @task()
-def update_inventory_computed_fields(inventory_id, should_update_hosts=True):
+def update_inventory_computed_fields(inventory_id):
     '''
     Signal handler and wrapper around inventory.update_computed_fields to
     prevent unnecessary recursive calls.
@@ -599,7 +607,7 @@ def update_inventory_computed_fields(inventory_id, should_update_hosts=True):
         return
     i = i[0]
     try:
-        i.update_computed_fields(update_hosts=should_update_hosts)
+        i.update_computed_fields()
     except DatabaseError as e:
         if 'did not affect any rows' in str(e):
             logger.debug('Exiting duplicate update_inventory_computed_fields task.')
@@ -642,7 +650,7 @@ def update_host_smart_inventory_memberships():
             logger.exception('Failed to update smart inventory memberships for {}'.format(smart_inventory.pk))
     # Update computed fields for changed inventories outside atomic action
     for smart_inventory in changed_inventories:
-        smart_inventory.update_computed_fields(update_groups=False, update_hosts=False)
+        smart_inventory.update_computed_fields()
 
 
 @task()
@@ -1656,8 +1664,12 @@ class RunJob(BaseTask):
                     args.append('--vault-id')
                     args.append('{}@prompt'.format(vault_id))
 
-        if job.forks:  # FIXME: Max limit?
-            args.append('--forks=%d' % job.forks)
+        if job.forks:
+            if settings.MAX_FORKS > 0 and job.forks > settings.MAX_FORKS:
+                logger.warning(f'Maximum number of forks ({settings.MAX_FORKS}) exceeded.')
+                args.append('--forks=%d' % settings.MAX_FORKS)
+            else: 
+                args.append('--forks=%d' % job.forks)
         if job.force_handlers:
             args.append('--force-handlers')
         if job.limit:
@@ -1868,7 +1880,7 @@ class RunJob(BaseTask):
         except Inventory.DoesNotExist:
             pass
         else:
-            update_inventory_computed_fields.delay(inventory.id, True)
+            update_inventory_computed_fields.delay(inventory.id)
 
 
 @task()
@@ -1977,8 +1989,9 @@ class RunProjectUpdate(BaseTask):
                     continue
                 env_key = ('ANSIBLE_GALAXY_SERVER_{}_{}'.format(server.get('id', 'unnamed'), key)).upper()
                 env[env_key] = server[key]
-        # now set the precedence of galaxy servers
-        env['ANSIBLE_GALAXY_SERVER_LIST'] = ','.join([server.get('id', 'unnamed') for server in galaxy_servers])
+        if galaxy_servers:
+            # now set the precedence of galaxy servers
+            env['ANSIBLE_GALAXY_SERVER_LIST'] = ','.join([server.get('id', 'unnamed') for server in galaxy_servers])
         return env
 
     def _build_scm_url_extra_vars(self, project_update):
@@ -2851,4 +2864,4 @@ def deep_copy_model_obj(
             ), permission_check_func[2])
             permission_check_func(creater, copy_mapping.values())
     if isinstance(new_obj, Inventory):
-        update_inventory_computed_fields.delay(new_obj.id, True)
+        update_inventory_computed_fields.delay(new_obj.id)

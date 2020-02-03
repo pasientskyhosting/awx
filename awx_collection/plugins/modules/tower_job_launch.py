@@ -31,7 +31,7 @@ options:
     job_type:
       description:
         - Job_type to use for the job, only used if prompt for job_type is set.
-      choices: ["run", "check", "scan"]
+      choices: ["run", "check"]
       type: str
     inventory:
       description:
@@ -122,10 +122,21 @@ def update_fields(module, p):
     params = p.copy()
 
     params_update = {}
+    job_template = params.get('job_template')
     extra_vars = params.get('extra_vars')
+    try:
+        job_template_to_launch = tower_cli.get_resource('job_template').get(name=job_template)
+    except (exc.NotFound) as excinfo:
+        module.fail_json(msg='Unable to launch job, job_template/{0} was not found: {1}'.format(job_template, excinfo), changed=False)
 
-    if extra_vars:
+    ask_extra_vars = job_template_to_launch['ask_variables_on_launch']
+    survey_enabled = job_template_to_launch['survey_enabled']
+
+    if extra_vars and (ask_extra_vars or survey_enabled):
         params_update['extra_vars'] = [json.dumps(extra_vars)]
+
+    elif extra_vars:
+        module.fail_json(msg="extra_vars is set on launch but the Job Template does not have ask_extra_vars or survey_enabled set to True.")
 
     params.update(params_update)
     return params
@@ -134,7 +145,7 @@ def update_fields(module, p):
 def main():
     argument_spec = dict(
         job_template=dict(required=True, type='str'),
-        job_type=dict(choices=['run', 'check', 'scan']),
+        job_type=dict(choices=['run', 'check']),
         inventory=dict(type='str', default=None),
         credential=dict(type='str', default=None),
         limit=dict(),

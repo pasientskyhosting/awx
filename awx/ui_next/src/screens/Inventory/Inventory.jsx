@@ -2,29 +2,42 @@ import React, { useEffect, useState } from 'react';
 import { t } from '@lingui/macro';
 import { withI18n } from '@lingui/react';
 import { Card, PageSection } from '@patternfly/react-core';
-import { Switch, Route, Redirect, withRouter, Link } from 'react-router-dom';
+import {
+  Switch,
+  Route,
+  Redirect,
+  Link,
+  useLocation,
+  useRouteMatch,
+} from 'react-router-dom';
 import { TabbedCardHeader } from '@components/Card';
 import CardCloseButton from '@components/CardCloseButton';
 import ContentError from '@components/ContentError';
 import RoutedTabs from '@components/RoutedTabs';
 import { ResourceAccessList } from '@components/ResourceAccessList';
+import ContentLoading from '@components/ContentLoading';
 import InventoryDetail from './InventoryDetail';
-import InventoryHosts from './InventoryHosts';
-import InventoryHostAdd from './InventoryHostAdd';
+
 import InventoryGroups from './InventoryGroups';
 import InventoryCompletedJobs from './InventoryCompletedJobs';
 import InventorySources from './InventorySources';
 import { InventoriesAPI } from '@api';
 import InventoryEdit from './InventoryEdit';
+import InventoryHosts from './InventoryHosts/InventoryHosts';
 
-function Inventory({ history, i18n, location, match, setBreadcrumb }) {
+function Inventory({ i18n, setBreadcrumb }) {
   const [contentError, setContentError] = useState(null);
   const [hasContentLoading, setHasContentLoading] = useState(true);
   const [inventory, setInventory] = useState(null);
+  const location = useLocation();
+  const match = useRouteMatch({
+    path: '/inventories/inventory/:id',
+  });
 
   useEffect(() => {
     async function fetchData() {
       try {
+        setHasContentLoading(true);
         const { data } = await InventoriesAPI.readDetail(match.params.id);
         setBreadcrumb(data);
         setInventory(data);
@@ -36,7 +49,7 @@ function Inventory({ history, i18n, location, match, setBreadcrumb }) {
     }
 
     fetchData();
-  }, [match.params.id, setBreadcrumb]);
+  }, [match.params.id, location.pathname, setBreadcrumb]);
 
   const tabsArray = [
     { name: i18n._(t`Details`), link: `${match.url}/details`, id: 0 },
@@ -53,7 +66,7 @@ function Inventory({ history, i18n, location, match, setBreadcrumb }) {
 
   let cardHeader = hasContentLoading ? null : (
     <TabbedCardHeader>
-      <RoutedTabs history={history} tabsArray={tabsArray} />
+      <RoutedTabs tabsArray={tabsArray} />
       <CardCloseButton linkTo="/inventories" />
     </TabbedCardHeader>
   );
@@ -61,9 +74,20 @@ function Inventory({ history, i18n, location, match, setBreadcrumb }) {
   if (
     location.pathname.endsWith('edit') ||
     location.pathname.endsWith('add') ||
-    location.pathname.includes('groups/')
+    location.pathname.includes('groups/') ||
+    location.pathname.includes('hosts/')
   ) {
     cardHeader = null;
+  }
+
+  if (hasContentLoading) {
+    return (
+      <PageSection>
+        <Card>
+          <ContentLoading />
+        </Card>
+      </PageSection>
+    );
   }
 
   if (!hasContentLoading && contentError) {
@@ -99,7 +123,6 @@ function Inventory({ history, i18n, location, match, setBreadcrumb }) {
               path="/inventories/inventory/:id/details"
               render={() => (
                 <InventoryDetail
-                  match={match}
                   hasInventoryLoading={hasContentLoading}
                   inventory={inventory}
                 />
@@ -111,9 +134,14 @@ function Inventory({ history, i18n, location, match, setBreadcrumb }) {
               render={() => <InventoryEdit inventory={inventory} />}
             />,
             <Route
-              key="host-add"
-              path="/inventories/inventory/:id/hosts/add"
-              render={() => <InventoryHostAdd />}
+              key="hosts"
+              path="/inventories/inventory/:id/hosts"
+              render={() => (
+                <InventoryHosts
+                  setBreadcrumb={setBreadcrumb}
+                  inventory={inventory}
+                />
+              )}
             />,
             <Route
               key="access"
@@ -130,18 +158,10 @@ function Inventory({ history, i18n, location, match, setBreadcrumb }) {
               path="/inventories/inventory/:id/groups"
               render={() => (
                 <InventoryGroups
-                  location={location}
-                  match={match}
-                  history={history}
                   setBreadcrumb={setBreadcrumb}
                   inventory={inventory}
                 />
               )}
-            />,
-            <Route
-              key="hosts"
-              path="/inventories/inventory/:id/hosts"
-              render={() => <InventoryHosts />}
             />,
             <Route
               key="sources"
@@ -178,4 +198,4 @@ function Inventory({ history, i18n, location, match, setBreadcrumb }) {
 }
 
 export { Inventory as _Inventory };
-export default withI18n()(withRouter(Inventory));
+export default withI18n()(Inventory);
