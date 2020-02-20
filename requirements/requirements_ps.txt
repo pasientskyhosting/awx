@@ -124,3 +124,5 @@ netaddr==0.7.19
 python-slugify==4.0.0
 terraform-bin==1.0.1
 ansible==2.9.1
+pynetbox==4.2.4
+python-consul==1.1.0

@@ -60,9 +60,9 @@ DOCUMENTATION = '''
                 - If True, it adds interfaces in host vars.
             default: False
             type: boolean
-        ip_address_additional:
+        interfaces_additional:
             description:
-                - If True, it looks up additional information about primary ip address.
+                - If True, it looks up additional information about ip addresses in interfaces.
             default: False
             type: boolean
         token:
@@ -108,7 +108,7 @@ api_endpoint: http://localhost:8000
 validate_certs: True
 config_context: False
 interfaces: True
-ip_address_additional: True
+interfaces_additional: True
 group_by:
   - device_roles
 query_filters:
@@ -241,11 +241,26 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
     @property
     def ip_address_extractors(self):
         return {
-            "dns_name": self.extract_dns_name,
+            "address": self.extract_ip_address,
+            "dns_name": self.extract_ip_dns_name,
+            "status": self.extract_ip_status,
+            "vrf": self.extract_ip_vrf,
         }
 
-    def extract_dns_name(self, ip):        
+    def extract_ip_vrf(self, ip):
+        try:
+            return "" if ip.get("vrf") == None else ip.get("vrf").get("name")
+        except Exception as error:
+            return ""
+
+    def extract_ip_dns_name(self, ip):
         return ip.get("dns_name")
+    
+    def extract_ip_address(self, ip):
+        return ip.get("address")
+
+    def extract_ip_status(self, ip):
+        return ip.get("status").get("value")
 
     @property
     def interface_extractors(self):
@@ -257,6 +272,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             "tagged_vlans": self.extract_interface_tagged_vlans,
             "untagged_vlan": self.extract_interface_untagged_vlan,            
             "type": self.extract_interface_type,
+            "ip_addresses": self.extract_interfaces_additional,
         }
 
     def extract_interface_mtu(self, interface):        
@@ -266,7 +282,10 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         return interface.get("name")
 
     def extract_interface_mac_address(self, interface):
-        return "" if interface.get("mac_address") is None else interface.get("mac_address")
+        try:
+            return "" if interface.get("mac_address") == None else interface.get("mac_address")
+        except Exception as error:
+            return ""
 
     def extract_interface_mode(self, interface):
         try:
@@ -303,8 +322,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             "platforms": self.extract_platform,
             "device_types": self.extract_device_type,
             "config_context": self.extract_config_context,
-            "manufacturers": self.extract_manufacturer,
-            "interfaces": self.extract_interfaces,            
+            "manufacturers": self.extract_manufacturer  
         }
 
     def extract_disk(self, host):
@@ -361,6 +379,11 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         except Exception:
             return
 
+    def ip_address_lookup(self, interface):
+        url = self.api_endpoint + "/api/ipam/ip-addresses/?interface_id=" + str(interface["id"])
+        # Fetch interface data
+        return self._fetch_information(url)
+    
     def interface_lookup(self, host):
         # Check if virtual device
         if host["cluster"] is None:
@@ -370,7 +393,27 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         # Fetch interface data
         return self._fetch_information(url)
 
-    def extract_interfaces(self, host):                
+
+    def extract_interfaces_additional(self, interface):        
+        try:
+            ip_address = {}
+            ip_addresses = []
+            if self.interfaces_additional:
+                ip_address_lookup = self.ip_address_lookup(interface)
+                # Check results
+                if 'results' in ip_address_lookup:
+                    for ip in ip_address_lookup['results']:
+                        for attribute, extractor in self.ip_address_extractors.items():
+                            ip_address[attribute] = extractor(ip)
+                        ip_addresses.append(ip_address)
+                        ip_address = {}
+                    return ip_addresses
+                else:
+                    return []       
+        except Exception:            
+            return
+
+    def extract_interfaces(self, host):        
         try:
             interface = {}
             interfaces = []
@@ -379,9 +422,10 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 # Check results
                 if 'results' in interface_lookup:
                     for nic in interface_lookup['results']:
-                        for attribute, extractor in self.interface_extractors.items():                                        
+                        for attribute, extractor in self.interface_extractors.items():
                             interface[attribute] = extractor(nic)
                         interfaces.append(interface)
+                        interface = {}
                     return interfaces
                 else:
                     return []       
@@ -394,7 +438,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         except Exception:
             return
 
-    def extract_ip_address_additional(self, host):
+    def extract_(self, host):
         try:
             url = self.api_endpoint + "/api/ipam/ip-addresses/" + str(host["primary_ip"]["id"])
             # Fetch interface data
@@ -556,8 +600,8 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         if self.extract_primary_ip6(host):
             self.inventory.set_variable(hostname, "primary_ip6", self.extract_primary_ip6(host=host))
 
-        if self.ip_address_additional:
-            self.inventory.set_variable(hostname, "ip_address_additional", self.extract_ip_address_additional(host=host))
+        if self.interfaces:
+            self.inventory.set_variable(hostname, "__netbox_interfaces", self.extract_interfaces(host=host))
 
     def main(self):
         self.refresh_lookups()
@@ -594,7 +638,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         self.validate_certs = self.get_option("validate_certs")
         self.config_context = self.get_option("config_context")
         self.interfaces = self.get_option("interfaces")
-        self.ip_address_additional = self.get_option("ip_address_additional")
+        self.interfaces_additional = self.get_option("interfaces_additional")
         self.headers = {
             'Authorization': "Token %s" % token,
             'User-Agent': "ansible %s Python %s" % (ansible_version, python_version.split(' ')[0]),

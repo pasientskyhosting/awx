@@ -130,12 +130,12 @@ RUN ln -sf /dev/stdout /var/log/nginx/access.log \
     && ln -sf /dev/stderr /var/log/nginx/error.log
 
 # Start Custom PS ----------------------------------------------
-ENV TERRAFORM_VERSION "0.12.20"
+RUN dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+RUN dnf install docker-ce jq --nobest -y
+RUN systemctl enable docker
+RUN docker --version
 ADD netbox.py /var/lib/awx/venv/ansible/lib/python3.6/site-packages/ansible/plugins/inventory/netbox.py
-# Get latest Terraform bin
-RUN wget -q -O terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
-RUN unzip /terraform.zip -d /bin
-# EndCustom PS -------------------------------------------------
+# EndCustom PS -----------------------------------------------------------------------
 
 ENV HOME=/home/awx
 WORKDIR ${HOME}
